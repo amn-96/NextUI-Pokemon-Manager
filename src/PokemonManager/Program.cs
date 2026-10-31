@@ -1,6 +1,7 @@
 using PKHeX.Core;
 using PokemonManager;
 using PokemonManager.Core;
+using PokemonManager.Core.Hacks;
 using PokemonManager.Gen3;
 using PokemonManager.Ui;
 
@@ -31,6 +32,7 @@ try
         "events" => Events(rest),
         "redeem-event" => RedeemEvent(rest),
         "gen3-status" => Gen3Status(rest),
+        "hack-list" => HackList(rest),
         "box-scene" => BoxSceneCommand(rest),
         "trainer-card" => TrainerCardCommand(rest),
         "gallery-build" => GalleryBuild(rest),
@@ -197,6 +199,27 @@ int RedeemEvent(List<string> a)
     return Print(result.Message);
 }
 
+// A save of a pokeemerald-expansion ROM hack (Seaglass...), which PKHeX reads wrongly; read without it. Read-only.
+int HackList(List<string> a)
+{
+    var path = Arg(a, 0, "save file");
+    var bytes = File.ReadAllBytes(path);
+    if (Rzip.IsCompressed(bytes))
+        bytes = Rzip.Decompress(bytes) ?? throw new InvalidDataException($"{path} is a damaged compressed save.");
+    var save = ExpansionSave.TryRead(bytes) ?? throw new InvalidDataException($"{path} isn't a Gen 3 flash save.");
+    var names = a.Count > 1 ? SpeciesNames.Find(File.ReadAllBytes(a[1])) : null;
+    string Species(ExpansionMon m) => names?.Name(m.Species) ?? $"#{m.Species}";
+    Console.WriteLine($"{save.TrainerName}  TID {save.TrainerId}  sections ok {save.Container.ValidChecksums()}/14  expanded data: {(save.UsesExpandedData ? "yes" : "no")}");
+    for (int i = 0; i < save.Party.Count; i++)
+        if (save.Party[i].IsOk)
+            Console.WriteLine($"p:{i + 1}\t{Species(save.Party[i])} Lv.{save.Party[i].PartyLevel}");
+    for (int b = 0; b < save.Boxes.Count; b++)
+        for (int s = 0; s < save.Boxes[b].Length; s++)
+            if (save.Boxes[b][s].IsOk)
+                Console.WriteLine($"{b + 1}:{s + 1}\t{Species(save.Boxes[b][s])}");
+    return 0;
+}
+
 int Gen3Status(List<string> a)
 {
     var entry = LoadSave(a, 0);
@@ -325,6 +348,7 @@ static int Usage(int code)
           events <save>                        list PKHeX's built-in events for this game
           redeem-event <save> <index>          send a built-in event Pokémon to the PC
           gen3-status <save>                   Gen 3 Mystery Gift / Event status
+          hack-list <save> [rom]               list a pokeemerald-expansion ROM hack's save (read-only), names from its ROM
           box-scene <save> <out.json> [assets] [slot] [font.ttf] scene file for the PC box viewer (testing)
           trainer-card <save> <out.json> [assets] [font.ttf]  card file for pkmgr-box --card (testing)
           gallery-build <EventsGallery dir> <out.zip>   bundle the Gen 1-5 EventsGallery files (build time)
