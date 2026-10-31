@@ -12,13 +12,18 @@
 
 - The 128 KB flash container: two slots (0x0000, 0xE000) of fourteen 4 KB sections, a footer at 0xFF4 with section id,
   checksum, signature `0x08012025` and save counter. The slot with the higher counter is current.
-- SaveBlock1 = sections 1-4 joined; PC storage = sections 5-13 joined. Party count at SaveBlock1+0x234, six 100-byte
-  records from +0x238. PC: current box (u32), then 14 boxes of 30 80-byte records from offset 4.
+- SaveBlock1 = sections 1-4 joined; PC storage = sections 5-13 joined. PC: current box (u32), then 14 boxes of 30 80-byte records from offset 4.
 - The Pokémon record: PV, OT id, nickname, OT name, checksum, then a 48-byte body XOR-encrypted with PV^OTID and
   shuffled into the substructures G, A, E, M by PV % 24. Body checksum = sum of its 24 u16.
 - Trainer name (8 bytes), TID and SID in section 0 at 0x0, 0xA and 0xC.
 
 ## What differs
+
+Not the same in every hack: **where the party is.** Vanilla Emerald has the party count (u32) at SaveBlock1+0x234 and six
+100-byte records after it. A hack that adds a field to SaveBlock1 moves it: Heart and Soul's count is at 0x238 *(verified:
+its party is Gastly, Totodile, Pidgey, Bellsprout, Dunsparse, Hoothoot)*. Reading the vanilla offset there gives a count of
+0 and an empty party, which looks like "the save has no party". The reader therefore finds the party: a count of 1-6 followed
+by that many valid records and then only empty ones.
 
 | What | Vanilla Gen 3 | pokeemerald-expansion hacks |
 | --- | --- | --- |
@@ -60,8 +65,24 @@ None of these alone proves it. The save container of a hack is valid, so the rea
 | Hack | Base | Species names in ROM | Section checksum lengths | Notes |
 | --- | --- | --- | --- | --- |
 | Emerald Seaglass | expansion, national dex order | stride 208, mixed case, at 0x8f087c in the v3.0 ROM *(verified)* | section 0 > 3884 | Matches Ehsan516's documented addresses |
-| Pokémon Heart and Soul | expansion | stride 268, upper case *(verified)* | sections 0 and 4 grown | party empty, 2 boxed Pokémon in the save checked |
-| Pokémon Lazarus | expansion-style ids (species up to 1332) | not found by the name search | section 0 grown more than the others | full party, 131 boxed Pokémon read correctly |
+| Pokémon Heart and Soul | expansion | stride 268, upper case *(verified)* | sections 0 and 4 grown | party count at SaveBlock1+0x238 (+4); full party of 6 and 2 boxed Pokémon read correctly |
+| Pokémon Lazarus | expansion-style ids (species up to 1332) | **none found** (see below) | section 0 grown more than the others | full party of 6 and 131 boxed Pokémon read correctly |
+
+### Known limit: species names when the ROM has no name table (Lazarus)
+
+The ROM search finds a name table only when it is stored as plain Gen 3 text with Bulbasaur, Ivysaur and Venusaur at an
+even spacing. Lazarus's ROM has no such table: Charmander, Squirtle and the other early species aren't present as text in
+any capitalisation, so names for it can't come from the ROM *(verified)*. The reader then falls back to the **national
+dex order**, which the ROM tables confirm for Seaglass and which gives a sensible Lazarus party (Kyogre, Togekiss,
+Mamoswine, Leafeon, Kommo-o). What you will see because of that:
+
+- Species up to 1025 are named from the national dex. This is an assumption for Lazarus, not a measurement.
+- Form and regional-variant ids above that (Lazarus's first party Pokémon is id 1294) show as `#<id>`. The dex has no entry
+  for them; their names would come from the hack's own tables, which haven't been located.
+- If a hack numbers species differently from the national dex, the fallback names are wrong without any error. Check a
+  known Pokémon against the game before trusting names for a new hack.
+
+Moves, items and abilities have the same limit (no names, only ids) until their tables are located.
 
 ## What this app does with them today
 

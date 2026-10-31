@@ -105,6 +105,25 @@ public class ExpansionSaveTests
     }
 
     [Fact]
+    public void AHackThatMovedThePartyIsStillFound()
+    {
+        // Heart and Soul keeps its party four bytes later than Emerald does
+        var data = Save(c =>
+        {
+            c.WriteBlock(Sb1, 0x238, [2, 0, 0, 0]);
+            c.WriteBlock(Sb1, 0x23C, Record(0x11111111, species: 92, exp: 216, expHigh: 255, moves: [1, 2, 3, 4], partyLevel: 6));
+            c.WriteBlock(Sb1, 0x23C + 100, Record(0x22222222, species: 158, exp: 1000, expHigh: 255, moves: [1, 2, 3, 4], partyLevel: 10));
+        });
+        var save = ExpansionSave.TryRead(data)!;
+        Assert.Equal(0x238, save.PartyCountOffset);
+        Assert.Equal([92, 158], save.Party.Select(m => m.Species));
+    }
+
+    [Fact]
+    public void AnEmptyPartyFallsBackToTheVanillaOffset()
+        => Assert.Equal(0x234, ExpansionSave.TryRead(Save(c => { }))!.PartyCountOffset);
+
+    [Fact]
     public void AVanillaRangeSaveIsNotCalledExpanded()
     {
         var data = Save(c =>

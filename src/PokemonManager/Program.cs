@@ -208,7 +208,8 @@ int HackList(List<string> a)
         bytes = Rzip.Decompress(bytes) ?? throw new InvalidDataException($"{path} is a damaged compressed save.");
     var save = ExpansionSave.TryRead(bytes) ?? throw new InvalidDataException($"{path} isn't a Gen 3 flash save.");
     var names = a.Count > 1 ? SpeciesNames.Find(File.ReadAllBytes(a[1])) : null;
-    string Species(ExpansionMon m) => names?.Name(m.Species) ?? $"#{m.Species}";
+    // the ROM's own table when it has one; else national dex order, which the hacks checked so far follow
+    string Species(ExpansionMon m) => names?.Name(m.Species) ?? Names.Species((ushort)m.Species);
     Console.WriteLine($"{save.TrainerName}  TID {save.TrainerId}  sections ok {save.Container.ValidChecksums()}/14  expanded data: {(save.UsesExpandedData ? "yes" : "no")}");
     for (int i = 0; i < save.Party.Count; i++)
         if (save.Party[i].IsOk)

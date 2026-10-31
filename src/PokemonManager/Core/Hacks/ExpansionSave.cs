@@ -110,8 +110,7 @@ public sealed class ExpansionSave
     public const int BoxCount = 14;
     public const int BoxSlots = 30;
 
-    private const int PartyCountOffset = 0x234;
-    private const int PartyOffset = 0x238;
+    private const int VanillaPartyCountOffset = 0x234;
     private const int PcBoxesOffset = 4; // after currentBox (u32)
     private static readonly int[] SaveBlock1 = [1, 2, 3, 4];
     private static readonly int[] PcStorage = [5, 6, 7, 8, 9, 10, 11, 12, 13];
@@ -132,8 +131,10 @@ public sealed class ExpansionSave
         SecretId = BinaryPrimitives.ReadUInt16LittleEndian(section0[0xC..]);
 
         var sb1 = container.Block(SaveBlock1);
+        PartyCountOffset = FindPartyCount(sb1);
         int count = (int)Math.Min(6, BinaryPrimitives.ReadUInt32LittleEndian(sb1.AsSpan(PartyCountOffset)));
-        Party = [.. Enumerable.Range(0, count).Select(i => ExpansionMon.Read(sb1.AsSpan(PartyOffset + i * ExpansionMon.PartySize, ExpansionMon.PartySize)))];
+        int partyStart = PartyCountOffset + 4;
+        Party = [.. Enumerable.Range(0, count).Select(i => ExpansionMon.Read(sb1.AsSpan(partyStart + i * ExpansionMon.PartySize, ExpansionMon.PartySize)))];
 
         var pc = container.Block(PcStorage);
         CurrentBox = (int)BinaryPrimitives.ReadUInt32LittleEndian(pc);
@@ -141,6 +142,12 @@ public sealed class ExpansionSave
             .Select(s => ExpansionMon.Read(pc.AsSpan(PcBoxesOffset + (b * BoxSlots + s) * ExpansionMon.BoxSize, ExpansionMon.BoxSize)))
             .ToArray())];
     }
+
+    /// <summary>
+    /// Where the party count (u32) is in SaveBlock1, with the six 100-byte records after it. Vanilla Emerald has it at
+    /// 0x234; a hack that adds fields to SaveBlock1 moves it (Heart and Soul's is at 0x238), so it is found, not assumed.
+    /// </summary>
+    public int PartyCountOffset { get; }
 
     public Gen3Container Container { get; }
     public string TrainerName { get; }
@@ -151,6 +158,39 @@ public sealed class ExpansionSave
     public IReadOnlyList<ExpansionMon[]> Boxes { get; }
 
     public IEnumerable<ExpansionMon> AllMons => Party.Concat(Boxes.SelectMany(b => b)).Where(m => m.IsOk);
+
+    /// <summary>
+    /// The vanilla offset when a party starts there; otherwise the first 4-byte aligned offset holding a count of 1-6
+    /// followed by that many valid Pokémon records and then only empty ones, which nothing else in SaveBlock1 looks like.
+    /// An empty party has no records to find, so it falls back to the vanilla offset.
+    /// </summary>
+    private static int FindPartyCount(byte[] sb1)
+    {
+        if (LooksLikeParty(sb1, VanillaPartyCountOffset))
+            return VanillaPartyCountOffset;
+        for (int offset = 0; offset + 4 + 6 * ExpansionMon.PartySize <= sb1.Length; offset += 4)
+        {
+            if (LooksLikeParty(sb1, offset))
+                return offset;
+        }
+        return VanillaPartyCountOffset;
+    }
+
+    private static bool LooksLikeParty(byte[] sb1, int countOffset)
+    {
+        if (countOffset + 4 + 6 * ExpansionMon.PartySize > sb1.Length)
+            return false;
+        uint count = BinaryPrimitives.ReadUInt32LittleEndian(sb1.AsSpan(countOffset));
+        if (count is < 1 or > 6)
+            return false;
+        for (int i = 0; i < 6; i++)
+        {
+            var mon = ExpansionMon.Read(sb1.AsSpan(countOffset + 4 + i * ExpansionMon.PartySize, ExpansionMon.PartySize));
+            if (i < count ? !mon.IsOk : mon.Status != MonStatus.Empty)
+                return false;
+        }
+        return true;
+    }
 
     /// <summary>The save as a Gen 3 flash save, or null when it isn't one.</summary>
     public static ExpansionSave? TryRead(byte[] data)
