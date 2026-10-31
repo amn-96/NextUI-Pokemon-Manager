@@ -129,6 +129,7 @@ public sealed class ExpansionSave
         TrainerName = Gen3Text.Decode(section0[..8]);
         TrainerId = BinaryPrimitives.ReadUInt16LittleEndian(section0[0xA..]);
         SecretId = BinaryPrimitives.ReadUInt16LittleEndian(section0[0xC..]);
+        Gender = section0[8] == 1 ? 1 : 0;
 
         var sb1 = container.Block(SaveBlock1);
         PartyCountOffset = FindPartyCount(sb1);
@@ -153,6 +154,9 @@ public sealed class ExpansionSave
     public string TrainerName { get; }
     public ushort TrainerId { get; }
     public ushort SecretId { get; }
+
+    /// <summary>0 for a boy, 1 for a girl (section 0, offset 8).</summary>
+    public int Gender { get; }
     public int CurrentBox { get; }
     public IReadOnlyList<ExpansionMon> Party { get; }
     public IReadOnlyList<ExpansionMon[]> Boxes { get; }

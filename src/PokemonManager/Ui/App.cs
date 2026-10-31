@@ -306,19 +306,62 @@ public sealed class App
         }
     }
 
-    /// <summary>Expansion-hack saves: pick one to read its party and boxes. Nothing is written.</summary>
+    /// <summary>
+    /// Expansion-hack saves, laid out like the main menu's (cartridge, name, player sprite and ID). Picking one opens
+    /// its menu. Nothing is written.
+    /// </summary>
     private void ShowHacks()
     {
         int selected = 0;
         while (true)
         {
-            var choice = _ui.Choose("Hack saves (view only)", _hacks.Select(h => h.Label).ToList(), selected);
+            var sprites = _hacks.Select(HackSprite).ToList();
+            var tags = _hacks.Select((h, i) => (string?)HackTag(h, sprites[i] is not null)).ToList();
+            var choice = _ui.Choose("Hack saves (view only)", _hacks.Select(h => h.Title).ToList(), selected, tags: tags, images: sprites,
+                icons: _hacks.Select(HackCartridge).ToList());
             if (choice is not { } c)
                 return;
             selected = c;
-            if (!_boxViewer.Text(_hacks[c].Title, _hacks[c].Report()))
-                _ui.Message(_hacks[c].Report());
+            HackMenu(_hacks[c]);
         }
+    }
+
+    private void HackMenu(HackSaveEntry hack)
+    {
+        var actions = new[] { "Party and boxes" };
+        int selected = 0;
+        while (true)
+        {
+            var background = _backgrounds.PathFor(hack.BaseGame, _screen);
+            var choice = _ui.Choose($"{hack.Title}\t{hack.Save.TrainerName}\t{hack.Save.TrainerId:D5}", actions, selected, background,
+                titleImage: HackSprite(hack));
+            if (choice is null)
+                return;
+            if (!_boxViewer.Text(hack.Title, hack.Report()))
+                _ui.Message(hack.Report());
+        }
+    }
+
+    private static string HackTag(HackSaveEntry hack, bool withSprite) => $"{hack.Save.TrainerName}{(withSprite ? "\t" : "  ")}{hack.Save.TrainerId:D5}";
+
+    /// <summary>The player's overworld sprite from the base game's set, as for the main menu.</summary>
+    private string? HackSprite(HackSaveEntry hack)
+    {
+        var set = hack.BaseGame switch { "firered" or "leafgreen" => "frlg", "ruby" or "sapphire" => "rs", _ => "e" };
+        var gender = hack.Save.Gender == 1 ? "f" : "m";
+        foreach (var name in new[] { $"{set}-{gender}", $"{set}-m" })
+        {
+            var path = Path.Combine(_paths.TrainersDir, $"{name}-{_uiScale}x.png");
+            if (File.Exists(path))
+                return path;
+        }
+        return null;
+    }
+
+    private string? HackCartridge(HackSaveEntry hack)
+    {
+        var path = Path.Combine(_paths.IconsDir, $"cart-{hack.BaseGame}.png");
+        return File.Exists(path) ? path : null;
     }
 
     // ---------------------------------------------------------------- save menu
