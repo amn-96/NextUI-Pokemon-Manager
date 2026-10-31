@@ -211,4 +211,25 @@ public class ExpansionSaveTests
         }
         Assert.Null(SpeciesNames.Find(new byte[0x4000]));
     }
+
+    [Fact]
+    public void AViewOnlyEntryIsMadeForExpandedSavesAndLeavesTheFileAlone()
+    {
+        var data = Save(c =>
+        {
+            c.WriteBlock([0], 0, Gen3Text.Encode("Ax")!.Concat(new byte[] { 0xFF }).ToArray());
+            c.WriteBlock(Sb1, 0x234, [1, 0, 0, 0]);
+            c.WriteBlock(Sb1, 0x238, Record(0xA1B2C3D4, species: 25, exp: 97336, expHigh: 255, moves: [126, 799, 304, 247], partyLevel: 46));
+        });
+        var path = Path.Combine(Path.GetTempPath(), $"hack-{Guid.NewGuid():N}.srm");
+        File.WriteAllBytes(path, data);
+        try
+        {
+            var entry = HackSaveEntry.TryLoad(path, [])!;
+            Assert.Contains("Lv.46", entry.Report());
+            Assert.Contains("View only", entry.Report());
+            Assert.Equal(data, File.ReadAllBytes(path));
+        }
+        finally { File.Delete(path); }
+    }
 }

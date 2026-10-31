@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using PKHeX.Core;
 using PokemonManager.Core;
+using PokemonManager.Core.Hacks;
 using PokemonManager.Gen3;
 
 namespace PokemonManager.Ui;
@@ -21,6 +22,7 @@ public sealed class App
     private List<SaveEntry>? _saves;
     /// <summary>Saves left off the main menu, and why.</summary>
     private List<(SaveEntry Save, string Reason)> _hidden = [];
+    private List<HackSaveEntry> _hacks = [];
     private SaveNames? _saveNames;
     private SaveNames SavedNames => _saveNames ??= new SaveNames(_paths.SaveNamesFile, _paths.SdRoot);
     private SavePlacement? _placement;
@@ -84,6 +86,9 @@ public sealed class App
             int hidden = _hidden.Count == 0 ? -1 : items.Count;
             if (hidden >= 0)
                 items.Add($"{_hidden.Count} others");
+            int hacks = _hacks.Count == 0 ? -1 : items.Count;
+            if (hacks >= 0)
+                items.Add($"{_hacks.Count} hack saves (view only)");
             int settings = items.Count; items.Add("Settings");
             int update = items.Count; items.Add("Update");
             int help = items.Count; items.Add("Help");
@@ -100,6 +105,7 @@ public sealed class App
             if (choice < saves.Count && _ui.ActionPressed) { RenameSave(saves[choice.Value]); continue; }
             if (choice < saves.Count && _ui.SecondaryPressed) { MoveSave(saves[choice.Value], toMain: false); continue; }
             if (choice == hidden) { ShowHidden(); continue; }
+            if (choice == hacks) { ShowHacks(); continue; }
             if (choice == settings) { SettingsMenu(); continue; }
             if (choice == update) { if (UpdateFlow()) return 0; continue; }
             if (choice == help) { HelpMenu(); continue; }
@@ -209,6 +215,7 @@ public sealed class App
         _ui.Busy("Looking for Pokémon saves...");
         var all = SaveLibrary.Scan(_paths.SaveRoots);
         _hidden = [];
+        _hacks = [];
         _romIndex = null;
         _backgroundCache.Clear();
         _profiles.Clear();
@@ -216,7 +223,15 @@ public sealed class App
         _cardLegal.Clear();
         // Only saves with their game's ROM (same file name), in games that have got as far as receiving the
         // Pokédex, are shown at all; "N others" lists those whose ROM isn't an official release.
-        all.RemoveAll(s => RomIndex.FindRoms(s.Path).Count == 0 || !TradeRules.HasPokedex(s.Sav));
+        all.RemoveAll(s => RomIndex.FindRoms(s.Path).Count == 0);
+        // pokeemerald-expansion hacks are misread by PKHeX: they're listed apart, view only
+        foreach (var s in all.ToList())
+            if (HackSaveEntry.TryLoad(s.Path, RomIndex.FindRoms(s.Path)) is { } hack)
+            {
+                all.Remove(s);
+                _hacks.Add(hack);
+            }
+        all.RemoveAll(s => !TradeRules.HasPokedex(s.Sav));
         if (all.Count != 0)
         {
             _ui.Busy("Checking ROMs are official...\n(The first check of each ROM can take a while.)");
@@ -288,6 +303,21 @@ public sealed class App
             }
             Console.Error.WriteLine($"opening {_hidden[c].Save.FileName}, not listed: {_hidden[c].Reason}");
             SaveMenu(_hidden[c].Save);
+        }
+    }
+
+    /// <summary>Expansion-hack saves: pick one to read its party and boxes. Nothing is written.</summary>
+    private void ShowHacks()
+    {
+        int selected = 0;
+        while (true)
+        {
+            var choice = _ui.Choose("Hack saves (view only)", _hacks.Select(h => h.Label).ToList(), selected);
+            if (choice is not { } c)
+                return;
+            selected = c;
+            if (!_boxViewer.Text(_hacks[c].Title, _hacks[c].Report()))
+                _ui.Message(_hacks[c].Report());
         }
     }
 
