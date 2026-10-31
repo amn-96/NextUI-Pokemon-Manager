@@ -31,7 +31,7 @@ by that many valid records and then only empty ones.
 | Moves, items | ≤ 354 moves, ≤ 376 items | far beyond (moves ≥ 799, items ≥ 521 seen) *(verified)* |
 | Experience word (G+4) | u32, max 1,640,000 | low **21 bits** experience; the **top 11 bits hold other data** and are non-zero in normal saves (255 is common) *(verified)*. Anything that writes the word must keep them |
 | Section checksum lengths | 3884 (section 0), 3848 (section 4), 3968, 2000 (section 13) | SaveBlock2 (section 0) is bigger; Heart and Soul's section 4 is too. The checksum covers the bigger structure, so a vanilla-length checksum fails *(verified)* |
-| Species name table | 11-byte names | 12-byte names in a struct per species: stride 208 (Seaglass, mixed case) and 268 (Heart and Soul, upper case) *(verified)*; Lazarus has no table that the search finds |
+| Species name table | 11-byte names | 12-byte names in a struct per species: stride 208 (Seaglass, mixed case) and 268 (Heart and Soul, upper case) *(verified)*; Lazarus: stride 212, found by vote |
 | Level | derived from experience | party records store it at +0x54 (box records don't); PKHeX derives it from the 32-bit word and shows 100 *(verified)* |
 
 ## Symptoms that a save is a hack's
@@ -66,18 +66,24 @@ None of these alone proves it. The save container of a hack is valid, so the rea
 | --- | --- | --- | --- | --- |
 | Emerald Seaglass | expansion, national dex order | stride 208, mixed case, at 0x8f087c in the v3.0 ROM *(verified)* | section 0 > 3884 | Matches Ehsan516's documented addresses |
 | Pokémon Heart and Soul | expansion | stride 268, upper case *(verified)* | sections 0 and 4 grown | party count at SaveBlock1+0x238 (+4); full party of 6 and 2 boxed Pokémon read correctly |
-| Pokémon Lazarus | expansion-style ids (species up to 1332) | **none found** (see below) | section 0 grown more than the others | full party of 6 and 131 boxed Pokémon read correctly |
+| Pokémon Lazarus | expansion-style ids (species up to 1356+) | stride 212, mixed case, names inside each species' data; found by vote (see below) *(verified)* | section 0 grown more than the others | full party of 6 and 131 boxed Pokémon read correctly, every name resolved |
 
-### Known limit: species names when the ROM has no name table (Lazarus)
+### Finding a table that has no Bulbasaur, Ivysaur and Venusaur in a row (Lazarus)
 
-The ROM search finds a name table only when it is stored as plain Gen 3 text with Bulbasaur, Ivysaur and Venusaur at an
-even spacing. Lazarus's ROM has no such table: Charmander, Squirtle and the other early species aren't present as text in
-any capitalisation, so names for it can't come from the ROM *(verified)*. The reader then falls back to the **national
-dex order**, which the ROM tables confirm for Seaglass and which gives a sensible Lazarus party (Kyogre, Togekiss,
-Mamoswine, Leafeon, Kommo-o). What you will see because of that:
+A hack that drops species, or keeps the name inside a bigger per-species struct with unused (all-zero) entries between
+them, breaks the three-names-in-a-row search. The fallback is a vote: look up well-known national dex names in the ROM
+(mixed case, 0xFF terminated), and let every pair of hits vote for the stride and start that would put them at their dex
+distance apart. The table is where most pairs agree. For Lazarus that gives stride 212; 122 of the 128 distinct Pokémon in
+its boxes (the save nicknames are the species names) sit at exactly `start + id * 212`, which is the check to repeat on a
+new hack.
 
-- Species up to 1025 are named from the national dex. This is an assumption for Lazarus, not a measurement.
-- Form and regional-variant ids above that (Lazarus's first party Pokémon is id 1294) show as `#<id>`. The dex has no entry
+### Known limit: a ROM where neither search finds a table
+
+Both searches need species names stored as plain Gen 3 text. For a ROM where they aren't, the reader falls back to the
+**national dex order**, which the ROM tables confirm for Seaglass. What you will see because of that:
+
+- Species up to 1025 are named from the national dex. This is an assumption for that hack, not a measurement. (Lazarus once relied on it and got names wrong: a regional form showed as Cetitan where the ROM table says Ponyta.)
+- Form and regional-variant ids above that show as `#<id>`. The dex has no entry
   for them; their names would come from the hack's own tables, which haven't been located.
 - If a hack numbers species differently from the national dex, the fallback names are wrong without any error. Check a
   known Pokémon against the game before trusting names for a new hack.

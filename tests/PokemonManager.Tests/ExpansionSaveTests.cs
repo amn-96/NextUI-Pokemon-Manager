@@ -213,6 +213,27 @@ public class ExpansionSaveTests
     }
 
     [Fact]
+    public void SpeciesNamesInsideBiggerStructsAreFoundByVote()
+    {
+        // no Bulbasaur: dex 4 onwards, a stride of 212 with an empty entry now and then, and one custom id out of order
+        var rom = new byte[0x20000];
+        const int stride = 212, start = 0x3000;
+        for (int dex = 4; dex <= 150; dex++)
+        {
+            if (dex % 17 == 0)
+                continue;
+            var name = PKHeX.Core.GameInfo.GetStrings("en").specieslist[dex];
+            if (Gen3Text.Encode(name) is not { } encoded)
+                continue;
+            encoded.CopyTo(rom, start + (dex - 1) * stride + 0x2C);
+            rom[start + (dex - 1) * stride + 0x2C + name.Length] = 0xFF;
+        }
+        var names = SpeciesNames.Find(rom)!;
+        Assert.Equal(stride, names.Stride);
+        Assert.Equal("Pikachu", names.Name(25));
+    }
+
+    [Fact]
     public void AViewOnlyEntryIsMadeForExpandedSavesAndLeavesTheFileAlone()
     {
         var data = Save(c =>
