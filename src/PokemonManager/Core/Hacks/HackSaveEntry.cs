@@ -5,11 +5,14 @@ namespace PokemonManager.Core.Hacks;
 /// <summary>
 /// A pokeemerald-expansion hack's save, shown view-only: nothing here writes to the file.
 /// </summary>
-public sealed class HackSaveEntry(string path, ExpansionSave save, SpeciesNames? names, IReadOnlyList<string> romPaths)
+public sealed class HackSaveEntry(string path, ExpansionSave save, IReadOnlyList<string> romPaths)
 {
     public string Path { get; } = path;
     public ExpansionSave Save { get; } = save;
-    public SpeciesNames? Names { get; } = names;
+    private readonly Lazy<SpeciesNames?> _names = new(() => RomNames(romPaths));
+
+    /// <summary>The ROM's species names, read the first time they're needed: searching a 32 MB ROM takes seconds on a handheld, so listing the saves doesn't.</summary>
+    public SpeciesNames? Names => _names.Value;
     public IReadOnlyList<string> RomPaths { get; } = romPaths;
 
     /// <summary>The base game named by the ROM's header (a hack keeps its base game's code), Emerald when it says nothing.</summary>
@@ -32,7 +35,7 @@ public sealed class HackSaveEntry(string path, ExpansionSave save, SpeciesNames?
             var save = ExpansionSave.TryRead(data);
             if (save is null || !save.UsesExpandedData)
                 return null;
-            return new HackSaveEntry(path, save, RomNames(romPaths), romPaths);
+            return new HackSaveEntry(path, save, romPaths);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

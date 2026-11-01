@@ -55,12 +55,13 @@ public sealed record SpeciesNames(int Offset, int Stride, byte[] Rom)
         return null;
     }
 
+    private const int VoteSampleStep = 4; // every 4th species: a quarter of the ROM searches, still hundreds of agreeing pairs
     private const int VoteMinNameLength = 5;
     private const int VoteMaxPerName = 6;
     private const int VoteMaxDexGap = 40;
     private const int VoteMinStride = 12;
     private const int VoteMaxStride = 600;
-    private const int VoteThreshold = 20;
+    private const int VoteThreshold = 10;
 
     /// <summary>
     /// For a hack that doesn't hold Bulbasaur, Ivysaur and Venusaur in a row (Lazarus drops some species and keeps its
@@ -73,7 +74,7 @@ public sealed record SpeciesNames(int Offset, int Stride, byte[] Rom)
         // the ROM's names are English whatever language the app is showing
         var english = PKHeX.Core.GameInfo.GetStrings("en").specieslist;
         var hits = new List<(int Dex, int At)>();
-        for (int dex = 1; dex <= 386; dex++)
+        for (int dex = 1; dex <= 386; dex += VoteSampleStep)
         {
             var name = english[dex];
             if (name.Length < VoteMinNameLength || Gen3Text.Encode(name) is not { } encoded)
